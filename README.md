@@ -1,24 +1,18 @@
-# RustDesk Performance Optimization
+# Performance Optimization Projects
 
-This project contains scripts and documentation to optimize RustDesk performance by moving configuration and logs from a slow drive to a fast drive.
+This repository contains optimization scripts and documentation for improving application performance by moving data from slow drives to fast drives.
 
-## Problem
+## Overview
 
-RustDesk was experiencing slow performance (especially screen sharing) because:
-- Configuration files were stored on slow drive (`/dev/sda1` mounted at `/home`)
-- Log files were written to slow drive
-- Broken FUSE mounts causing additional issues
+Both projects address the same underlying issue: applications experiencing slow performance because their data (configuration, cache, logs) is stored on a slow HDD drive (`/dev/sda1` mounted at `/home`) instead of the fast NVMe SSD drive.
 
-## System Disk Configuration
-
-### Current Disk Setup
+### System Configuration
 
 **Fast OS Drive (NVMe SSD)**:
 - Device: `/dev/mapper/ubuntu--vg-ubuntu--lv` (LVM logical volume)
 - Physical Disk: `nvme0n1` (894.2G NVMe SSD)
 - Size: 689G total, 260G used (40%), 401G available
 - Mounted at: `/` (root filesystem)
-- Contains: OS, system binaries, `/opt`, `/var`
 - Performance: ~3000+ MB/s sequential, <0.1ms latency
 
 **Slow Data Drive (HDD)**:
@@ -26,119 +20,125 @@ RustDesk was experiencing slow performance (especially screen sharing) because:
 - Physical Disk: `sda` (21T HDD)
 - Size: 21T total, 2.0T used (10%), 18T available
 - Mounted at: `/home`
-- Contains: User data, Docker images, application data
 - Performance: ~200 MB/s sequential, 5-15ms latency
 
-**tmpfs (RAM)**:
-- Mounted at: `/tmp`
-- Size: 51G (RAM-based)
-- Performance: RAM speed, near-zero latency
+**Performance Impact**: The slow drive has **30-150x higher latency** than the fast drive, causing significant I/O bottlenecks.
 
-**Performance Impact**: The slow drive has 30-150x higher latency than the fast drive, causing significant I/O bottlenecks for RustDesk operations.
+## Projects
 
-## Solution
+### 1. RustDesk Performance Optimization
 
-Move RustDesk data to fast drive:
-- **Configuration**: `/opt/rustdesk/config` (fast drive) with symlink from `~/.config/rustdesk`
-- **Logs**: `/tmp/rustdesk-data/logs/RustDesk` (tmpfs - RAM-based, fastest)
+Optimizes RustDesk remote desktop application performance.
 
-## Quick Start
+**Location**: [`fix-rustdesk-slowness/`](fix-rustdesk-slowness/)
 
-Run the master optimization script:
+**Problem**: RustDesk was experiencing slow screen sharing and general operations because configuration and logs were stored on the slow drive.
 
+**Solution**: 
+- Moves configuration to `/opt/rustdesk/config` (fast drive)
+- Moves logs to `/tmp/rustdesk-data/logs/RustDesk` (tmpfs - RAM-based)
+
+**Quick Start**:
 ```bash
-cd /home/aiserver/LABS/RUSTDESK/fix-rustdesk-slowness
+cd fix-rustdesk-slowness
 ./00-run-optimization.sh
 ```
 
-This will execute all optimization steps automatically.
+**See**: [`fix-rustdesk-slowness/README.md`](fix-rustdesk-slowness/README.md) for detailed documentation.
 
-## Files
+---
 
-### Scripts
+### 2. Cursor IDE Performance Optimization
 
-- **`00-run-optimization.sh`** - Master script that runs all optimization steps
-- **`01-setup-rustdesk-fast.sh`** - Moves configuration to fast drive
-- **`02-fix-fuse-mounts.sh`** - Cleans up broken FUSE mounts
-- **`03-create-systemd-override.sh`** - Configures log location via systemd override
-- **`04-monitor-performance.sh`** - Monitors and verifies performance improvements
+Optimizes Cursor IDE performance for faster startup, extension loading, and workspace operations.
 
-### Documentation
+**Location**: [`fix-cursor-slowness/`](fix-cursor-slowness/)
 
-- **`ANALYSIS.md`** - Detailed analysis of the performance issue
-- **`IMPLEMENTATION.md`** - Step-by-step implementation guide
-- **`README.md`** - This file
+**Problem**: Cursor IDE was experiencing slow startup, extension loading, and workspace operations because configuration (4.0GB), cache, and agent data were stored on the slow drive.
 
-### Backup
+**Solution**:
+- Moves configuration to `/opt/cursor/config` (fast drive)
+- Moves cursor-agent to `/opt/cursor/cursor-agent` (fast drive)
+- Optionally moves cache to `/tmp/cursor-cache` (tmpfs - RAM-based)
 
-- **`backup/`** - Backup of original RustDesk configuration
+**Quick Start**:
+```bash
+cd fix-cursor-slowness
+./00-run-optimization.sh
+```
 
-## Manual Steps
+**IMPORTANT**: Close Cursor IDE completely before running the optimization scripts!
 
-If you prefer to run steps individually:
+**See**: [`fix-cursor-slowness/README.md`](fix-cursor-slowness/README.md) for detailed documentation.
 
-1. **Setup fast drive storage:**
-   ```bash
-   ./01-setup-rustdesk-fast.sh
-   ```
+## Repository Structure
 
-2. **Fix FUSE mounts:**
-   ```bash
-   ./02-fix-fuse-mounts.sh
-   ```
+```
+.
+├── README.md                    # This file
+├── fix-rustdesk-slowness/       # RustDesk optimization
+│   ├── 00-run-optimization.sh
+│   ├── 01-setup-rustdesk-fast.sh
+│   ├── 02-fix-fuse-mounts.sh
+│   ├── 03-create-systemd-override.sh
+│   ├── 04-monitor-performance.sh
+│   ├── ANALYSIS.md
+│   ├── IMPLEMENTATION.md
+│   ├── README.md
+│   └── STEPS.md
+└── fix-cursor-slowness/         # Cursor IDE optimization
+    ├── 00-run-optimization.sh
+    ├── 01-setup-fast.sh
+    ├── 02-optimize-cache.sh
+    ├── 03-verify.sh
+    ├── ANALYSIS.md
+    └── README.md
+```
 
-3. **Configure log location:**
-   ```bash
-   ./03-create-systemd-override.sh
-   ```
+## Common Approach
 
-4. **Restart RustDesk:**
-   ```bash
-   sudo systemctl restart rustdesk
-   ```
+Both projects follow the same optimization strategy:
 
-5. **Verify changes:**
-   ```bash
-   ./04-monitor-performance.sh
-   ```
+1. **Identify slow data locations** - Configuration, cache, logs on slow drive
+2. **Create fast drive storage** - Set up directories on `/opt` (fast drive)
+3. **Move data** - Copy data to fast drive locations
+4. **Create symlinks** - Maintain compatibility with expected paths
+5. **Optional cache optimization** - Move cache to tmpfs (RAM) for maximum performance
+6. **Verify** - Check that optimizations are working correctly
 
-## Expected Results
+## Requirements
+
+- **Sudo privileges** - Required for creating directories in `/opt` and setting permissions
+- **Application must be closed** - Especially important for Cursor IDE
+- **Backup created** - All scripts create backups before making changes
+
+## Expected Performance Improvements
 
 After optimization:
-- ✅ Configuration on fast drive (30-50% faster reads)
-- ✅ Logs in tmpfs (RAM speed writes)
-- ✅ Fixed FUSE mounts
-- ✅ Improved screen sharing performance
-- ✅ Reduced latency in all operations
+- **30-50% faster startup time** (config reads from fast drive)
+- **Reduced latency** for all operations
+- **Faster cache operations** (if using tmpfs)
+- **Improved overall responsiveness**
 
-## Troubleshooting
+## Git Branches
 
-See `IMPLEMENTATION.md` for detailed troubleshooting steps.
-
-## Rollback
-
-To rollback changes:
-
-```bash
-# Remove symlink and restore backup
-rm ~/.config/rustdesk
-cp -r backup/rustdesk ~/.config/rustdesk
-
-# Remove systemd override
-sudo rm -rf /etc/systemd/system/rustdesk.service.d/
-sudo systemctl daemon-reload
-sudo systemctl restart rustdesk
-```
+- **`main`** - Original repository state
+- **`fix-cursor-slowness`** - Branch with Cursor IDE optimization (includes reorganized structure)
 
 ## Notes
 
-- **Sudo Required**: Scripts `01-setup-rustdesk-fast.sh`, `02-fix-fuse-mounts.sh`, and `03-create-systemd-override.sh` require sudo privileges for:
-  - Creating directories in `/opt` and `/etc/systemd`
-  - Unmounting root-owned FUSE mounts
-  - Setting directory permissions
-- **FUSE Mounts**: The `02-fix-fuse-mounts.sh` script uses multiple unmount strategies (fusermount, lazy unmount, force unmount) to handle busy or root-owned mounts. Mounts are automatically recreated by RustDesk on service restart.
-- **Logs in tmpfs**: Cleared on reboot (normal behavior, acceptable trade-off for performance)
-- **Configuration**: Persistent on `/opt/rustdesk/config` (fast drive)
-- **Symlink**: `~/.config/rustdesk` symlinks to `/opt/rustdesk/config` for compatibility
-- **Backup**: Original configuration is backed up in `backup/` directory for rollback
+- All scripts include safety checks and backup mechanisms
+- Symlinks ensure compatibility with application expectations
+- Cache on tmpfs is cleared on reboot (normal behavior)
+- Configuration on fast drive is persistent
+- Both projects can be used independently
 
+## Troubleshooting
+
+For project-specific troubleshooting, see:
+- RustDesk: [`fix-rustdesk-slowness/README.md`](fix-rustdesk-slowness/README.md)
+- Cursor IDE: [`fix-cursor-slowness/README.md`](fix-cursor-slowness/README.md)
+
+## License
+
+This repository contains optimization scripts and documentation. Use at your own risk. Always backup your data before running optimization scripts.
